@@ -1,71 +1,142 @@
 <!DOCTYPE html>
-<html lang="es">
+<html lang="en">
 
 <head>
-
   <meta charset="utf-8">
-  <title>SIMON DICE</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet"
-    integrity="sha384-1BmE4kWBq78iYhFldvKuhfTAU6auU8tT94WrHftjDbrCEXSU1oBoqyl2QvZ6jIW3" crossorigin="anonymous">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Neon Synth Simon Says, a responsive memory arcade game built with HTML, CSS, JavaScript, WebAudio, keyboard controls, modes, and local high scores.">
+  <meta name="theme-color" content="#070816">
+  <title>Neon Synth Simon Says</title>
   <link rel="stylesheet" href="styles.css">
 </head>
 
 <body>
-  <p class="simon-title">SIMON SAYS</p>
-  <div class="container">
-    <div class="col-sm">
+  <main class="game-shell">
+    <section class="hero-panel" aria-labelledby="game-title">
+      <div class="topbar">
+        <a class="brand" href="#game-title" aria-label="Neon Synth Simon Says">
+          <span class="brand-mark">SS</span>
+          <span data-i18n="brand">Neon Synth</span>
+        </a>
 
-      <p id="dialogo" class="estilodialogo"><strong><!-- --></strong></p>
-
-      <div class="row">
-        <div class="col-sm">
-          <div role="alert" id="estado" class="estado"></div>
+        <div class="topbar-actions" aria-label="Display controls">
+          <button class="chip-button" type="button" data-language-toggle>ES</button>
+          <button class="chip-button" type="button" data-reset-scores data-i18n="resetScores">Reset scores</button>
         </div>
       </div>
-      <div class="col-sm">
-        <button type="button" class="btn btn-primary boton-start" id="boton">START</button>
-        <button class="boton-ronda custom-btn">ROUND <strong id="ronda"></strong></button>
+
+      <div class="intro-grid">
+        <div class="intro-copy">
+          <p class="eyebrow" data-i18n="eyebrow">Memory arcade sequence</p>
+          <h1 id="game-title">Simon Says</h1>
+          <p class="lede" data-i18n="lede">
+            Watch the pattern, replay it cleanly, and keep your streak alive as the machine gets faster.
+          </p>
+        </div>
+
+        <aside class="status-card" aria-live="polite">
+          <p class="status-label" data-i18n="statusLabel">System status</p>
+          <p class="status-message" data-status-message>Press Start to boot the board.</p>
+          <div class="phase-meter" aria-hidden="true">
+            <span data-phase-dot="idle"></span>
+            <span data-phase-dot="preview"></span>
+            <span data-phase-dot="player"></span>
+            <span data-phase-dot="gameover"></span>
+          </div>
+        </aside>
       </div>
-    </div>
-  </div>
-  <div class="container-fluid" id="tablero">
+    </section>
 
-        <div id="cuadro-1" class="cuadro"></div>
+    <section class="game-panel" aria-label="Simon Says game board">
+      <div class="hud" aria-label="Game statistics">
+        <article>
+          <span data-i18n="round">Round</span>
+          <strong data-round>0</strong>
+        </article>
+        <article>
+          <span data-i18n="score">Score</span>
+          <strong data-score>0</strong>
+        </article>
+        <article>
+          <span data-i18n="best">Best</span>
+          <strong data-best>0</strong>
+        </article>
+        <article>
+          <span data-i18n="combo">Combo</span>
+          <strong data-combo>0</strong>
+        </article>
+      </div>
 
+      <div class="machine">
+        <div class="board" data-board>
+          <button class="pad pad-red" type="button" data-pad="0" aria-label="Red pad. Keyboard Q.">
+            <span>Q</span>
+          </button>
+          <button class="pad pad-blue" type="button" data-pad="1" aria-label="Blue pad. Keyboard W.">
+            <span>W</span>
+          </button>
+          <button class="pad pad-yellow" type="button" data-pad="2" aria-label="Yellow pad. Keyboard A.">
+            <span>A</span>
+          </button>
+          <button class="pad pad-green" type="button" data-pad="3" aria-label="Green pad. Keyboard S.">
+            <span>S</span>
+          </button>
+          <div class="core" aria-hidden="true">
+            <span data-core-label>READY</span>
+          </div>
+        </div>
+      </div>
 
-        <div id="cuadro-2" class="cuadro"></div>
+      <div class="controls">
+        <button class="primary-action" type="button" data-start>
+          <span data-i18n="start">Start game</span>
+        </button>
 
+        <fieldset class="mode-picker" aria-label="Game mode">
+          <legend data-i18n="mode">Mode</legend>
+          <label>
+            <input type="radio" name="mode" value="classic" checked>
+            <span data-i18n="modeClassic">Classic</span>
+          </label>
+          <label>
+            <input type="radio" name="mode" value="speedrun">
+            <span data-i18n="modeSpeedrun">Speedrun</span>
+          </label>
+          <label>
+            <input type="radio" name="mode" value="drift">
+            <span data-i18n="modeDrift">Memory Drift</span>
+          </label>
+        </fieldset>
+      </div>
+    </section>
 
-        <div id="cuadro-3" class="cuadro"></div>
+    <section class="info-grid" aria-label="Game information">
+      <article>
+        <span>01</span>
+        <h2 data-i18n="classicTitle">Classic pressure</h2>
+        <p data-i18n="classicCopy">Every round adds one more note. Read the light, trust the rhythm, repeat the path.</p>
+      </article>
+      <article>
+        <span>02</span>
+        <h2 data-i18n="speedTitle">Speedrun scoring</h2>
+        <p data-i18n="speedCopy">The preview tightens up and quick reactions add bonus points without changing the sequence rules.</p>
+      </article>
+      <article>
+        <span>03</span>
+        <h2 data-i18n="driftTitle">Memory drift</h2>
+        <p data-i18n="driftCopy">The board adds visual noise as rounds climb, but the real sequence stays fair and replayable.</p>
+      </article>
+    </section>
+  </main>
 
-        <div id="cuadro-4" class="cuadro"></div>
-
-
-  </div>
-  <audio id="sound-player"></audio>
-  <audio id="start">
+  <audio id="fallback-start" preload="auto">
     <source src="src/audio/START.mp3" type="audio/mpeg">
   </audio>
-  <audio id="gameover">
+  <audio id="fallback-gameover" preload="auto">
     <source src="src/audio/GAMEOVER.mp3" type="audio/mpeg">
   </audio>
-  <audio id="audio1">
-    <source src="src/audio/SOUND1.mp3" type="audio/mpeg">
-  </audio>
 
-  <audio id="audio2">
-    <source src="src/audio/SOUND2.mp3" type="audio/mpeg">
-  </audio>
-
-  <audio id="audio3">
-    <source src="src/audio/SOUND3.mp3" type="audio/mpeg">
-  </audio>
-
-  <audio id="audio4">
-    <source src="src/audio/SOUND4.mp3" type="audio/mpeg">
-  </audio>
+  <script src="scripts.js"></script>
 </body>
-<script src="scripts.js"></script>
 
 </html>
