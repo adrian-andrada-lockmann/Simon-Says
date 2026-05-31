@@ -67,6 +67,11 @@
         </article>
       </div>
 
+      <div class="feedback-strip" aria-live="polite">
+        <p data-feedback>Ready when you are.</p>
+        <span data-bonus></span>
+      </div>
+
       <div class="machine">
         <div class="board" data-board>
           <button class="pad pad-red" type="button" data-pad="0" aria-label="Red pad. Keyboard Q.">
@@ -90,6 +95,9 @@
       <div class="controls">
         <button class="primary-action" type="button" data-start>
           <span data-i18n="start">Start game</span>
+        </button>
+        <button class="secondary-action" type="button" data-pause disabled>
+          <span data-i18n="pause">Pause</span>
         </button>
 
         <fieldset class="mode-picker" aria-label="Game mode">
@@ -128,6 +136,40 @@
       </article>
     </section>
   </main>
+
+  <div class="game-over-overlay" data-game-over hidden>
+    <section class="summary-card" role="dialog" aria-modal="true" aria-labelledby="summary-title">
+      <p class="eyebrow" data-i18n="runComplete">Run complete</p>
+      <h2 id="summary-title" data-i18n="summaryTitle">Final signal report</h2>
+      <dl>
+        <div>
+          <dt data-i18n="score">Score</dt>
+          <dd data-summary-score>0</dd>
+        </div>
+        <div>
+          <dt data-i18n="round">Round</dt>
+          <dd data-summary-round>0</dd>
+        </div>
+        <div>
+          <dt data-i18n="mode">Mode</dt>
+          <dd data-summary-mode>Classic</dd>
+        </div>
+        <div>
+          <dt data-i18n="best">Best</dt>
+          <dd data-summary-best>0</dd>
+        </div>
+      </dl>
+      <p class="summary-note" data-summary-note></p>
+      <div class="summary-actions">
+        <button class="primary-action" type="button" data-play-again>
+          <span data-i18n="playAgain">Play again</span>
+        </button>
+        <button class="secondary-action" type="button" data-change-mode>
+          <span data-i18n="changeMode">Change mode</span>
+        </button>
+      </div>
+    </section>
+  </div>
 
   <audio id="fallback-start" preload="auto">
     <source src="src/audio/START.mp3" type="audio/mpeg">

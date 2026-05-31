@@ -27,6 +27,8 @@ const translations = {
         combo: "Combo",
         start: "Start game",
         restart: "Restart",
+        pause: "Pause",
+        resume: "Resume",
         mode: "Mode",
         modeClassic: "Classic",
         modeSpeedrun: "Speedrun",
@@ -42,11 +44,26 @@ const translations = {
         player: "Your turn. Replay the sequence.",
         success: "Clean input. Loading next round.",
         gameover: "Sequence broken. Run ended.",
+        paused: "Paused. Press Space or Resume.",
         scoresReset: "Scores reset. Start a new run.",
         audioBlocked: "Tap Start again if your browser blocked audio.",
+        feedbackIdle: "Ready when you are.",
+        countdownGo: "GO",
+        perfect: "Perfect signal.",
+        clean: "Clean input.",
+        comboHot: "Combo x{combo}",
+        speedBonus: "+{bonus} speed bonus",
+        roundClear: "Round {round} cleared.",
+        newBest: "New best signal recorded.",
+        noNewBest: "Best signal remains {best}.",
+        runComplete: "Run complete",
+        summaryTitle: "Final signal report",
+        playAgain: "Play again",
+        changeMode: "Change mode",
         ready: "READY",
         listen: "LISTEN",
         play: "PLAY",
+        pausedCore: "PAUSE",
         fail: "FAIL"
     },
     es: {
@@ -61,6 +78,8 @@ const translations = {
         combo: "Combo",
         start: "Iniciar juego",
         restart: "Reiniciar",
+        pause: "Pausa",
+        resume: "Seguir",
         mode: "Modo",
         modeClassic: "Clasico",
         modeSpeedrun: "Speedrun",
@@ -76,11 +95,26 @@ const translations = {
         player: "Tu turno. Repite la secuencia.",
         success: "Entrada limpia. Cargando siguiente ronda.",
         gameover: "Secuencia rota. Fin de la partida.",
+        paused: "Pausa. Presiona Space o Seguir.",
         scoresReset: "Scores borrados. Inicia una nueva partida.",
         audioBlocked: "Toca Start otra vez si el navegador bloqueo el audio.",
+        feedbackIdle: "Listo cuando quieras.",
+        countdownGo: "YA",
+        perfect: "Senal perfecta.",
+        clean: "Entrada limpia.",
+        comboHot: "Combo x{combo}",
+        speedBonus: "+{bonus} bonus rapido",
+        roundClear: "Ronda {round} superada.",
+        newBest: "Nuevo mejor registro.",
+        noNewBest: "El mejor sigue en {best}.",
+        runComplete: "Partida completa",
+        summaryTitle: "Reporte final",
+        playAgain: "Jugar otra vez",
+        changeMode: "Cambiar modo",
         ready: "LISTO",
         listen: "MIRA",
         play: "JUEGA",
+        pausedCore: "PAUSA",
         fail: "FALLO"
     }
 };
@@ -93,12 +127,23 @@ const elements = {
     score: document.querySelector("[data-score]"),
     best: document.querySelector("[data-best]"),
     combo: document.querySelector("[data-combo]"),
+    feedback: document.querySelector("[data-feedback]"),
+    bonus: document.querySelector("[data-bonus]"),
     modeInputs: [...document.querySelectorAll("input[name='mode']")],
     board: document.querySelector("[data-board]"),
     core: document.querySelector("[data-core-label]"),
     languageToggle: document.querySelector("[data-language-toggle]"),
     resetScores: document.querySelector("[data-reset-scores]"),
-    phaseDots: [...document.querySelectorAll("[data-phase-dot]")]
+    pause: document.querySelector("[data-pause]"),
+    phaseDots: [...document.querySelectorAll("[data-phase-dot]")],
+    overlay: document.querySelector("[data-game-over]"),
+    summaryScore: document.querySelector("[data-summary-score]"),
+    summaryRound: document.querySelector("[data-summary-round]"),
+    summaryMode: document.querySelector("[data-summary-mode]"),
+    summaryBest: document.querySelector("[data-summary-best]"),
+    summaryNote: document.querySelector("[data-summary-note]"),
+    playAgain: document.querySelector("[data-play-again]"),
+    changeMode: document.querySelector("[data-change-mode]")
 };
 
 let audioContext = null;
@@ -117,7 +162,12 @@ function createInitialState() {
         sequence: [],
         playerIndex: 0,
         acceptingInput: false,
-        lastInputAt: 0
+        lastInputAt: 0,
+        paused: false,
+        previousPhase: null,
+        newBest: false,
+        lastBonus: 0,
+        roundStartedAt: 0
     };
 }
 
@@ -144,6 +194,12 @@ function t(key) {
     return translations[language][key] || translations.en[key] || key;
 }
 
+function formatText(key, values = {}) {
+    return Object.entries(values).reduce((text, [name, value]) => {
+        return text.replace(`{${name}}`, String(value));
+    }, t(key));
+}
+
 function setLanguage(nextLanguage) {
     language = nextLanguage;
     document.documentElement.lang = language;
@@ -156,13 +212,20 @@ function setLanguage(nextLanguage) {
     elements.languageToggle.textContent = language === "en" ? "ES" : "EN";
     elements.status.textContent = getStatusText();
     updateStartLabel();
+    updatePauseLabel();
     updateCoreLabel();
+    setFeedback(game.phase === "idle" ? "feedbackIdle" : game.phase);
+
+    if (!elements.overlay.hidden) {
+        updateGameOverSummaryText();
+    }
 }
 
 function setPhase(phase) {
     game.phase = phase;
     elements.status.textContent = getStatusText();
     updateCoreLabel();
+    updatePauseLabel();
 
     elements.phaseDots.forEach((dot) => {
         dot.classList.toggle("is-active", dot.dataset.phaseDot === phase);
@@ -177,11 +240,17 @@ function updateStartLabel() {
     elements.start.querySelector("span").textContent = game.phase === "idle" ? t("start") : t("restart");
 }
 
+function updatePauseLabel() {
+    elements.pause.querySelector("span").textContent = game.paused ? t("resume") : t("pause");
+    elements.pause.disabled = !["preview", "player", "success", "paused"].includes(game.phase);
+}
+
 function updateCoreLabel() {
     const labels = {
         idle: t("ready"),
         preview: t("listen"),
         player: t("play"),
+        paused: t("pausedCore"),
         success: "OK",
         gameover: t("fail")
     };
@@ -194,6 +263,29 @@ function updateHud() {
     elements.score.textContent = String(game.score);
     elements.combo.textContent = String(game.combo);
     elements.best.textContent = String(highScores[game.mode] || 0);
+}
+
+function bumpHud(...keys) {
+    const map = {
+        round: elements.round.closest("article"),
+        score: elements.score.closest("article"),
+        best: elements.best.closest("article"),
+        combo: elements.combo.closest("article")
+    };
+
+    keys.forEach((key) => {
+        const item = map[key];
+        if (!item) return;
+        item.classList.remove("is-bumped");
+        void item.offsetWidth;
+        item.classList.add("is-bumped");
+    });
+}
+
+function setFeedback(messageKey, options = {}) {
+    elements.feedback.textContent = options.text || formatText(messageKey, options.values || {});
+    elements.bonus.textContent = options.bonus ? formatText("speedBonus", { bonus: options.bonus }) : "";
+    elements.feedback.parentElement.classList.toggle("is-hot", options.hot || Boolean(options.bonus));
 }
 
 function getSelectedMode() {
@@ -209,6 +301,29 @@ function sleep(ms) {
     return new Promise((resolve) => {
         window.setTimeout(resolve, ms);
     });
+}
+
+async function pausableSleep(ms, token) {
+    let remaining = ms;
+    let lastTick = performance.now();
+
+    while (remaining > 0) {
+        if (token !== runToken) {
+            return false;
+        }
+
+        if (!game.paused) {
+            const now = performance.now();
+            remaining -= now - lastTick;
+            lastTick = now;
+        } else {
+            lastTick = performance.now();
+        }
+
+        await sleep(40);
+    }
+
+    return token === runToken;
 }
 
 async function ensureAudio() {
@@ -268,11 +383,15 @@ function playEffect(kind) {
 
 async function flashPad(padId, options = {}) {
     const pad = elements.pads[padId];
-    const className = options.wrong ? "is-wrong" : "is-active";
+    const className = options.wrong ? "is-wrong" : options.player ? "is-player-hit" : options.preview ? "is-preview" : "is-active";
 
     pad.classList.add(className);
     playTone(padId, options.duration ? options.duration / 1000 : 0.22, options.type || "sine");
-    await sleep(options.duration || 260);
+    if (options.token) {
+        await pausableSleep(options.duration || 260, options.token);
+    } else {
+        await sleep(options.duration || 260);
+    }
     pad.classList.remove(className);
 }
 
@@ -293,6 +412,7 @@ function unlockPads() {
 
 function resetRun() {
     runToken += 1;
+    hideGameOverSummary();
     lockPads();
     game = {
         ...createInitialState(),
@@ -301,6 +421,8 @@ function resetRun() {
     elements.board.classList.toggle("is-drift", game.mode === "drift");
     updateHud();
     updateStartLabel();
+    updatePauseLabel();
+    setFeedback("feedbackIdle");
     setPhase("idle");
 }
 
@@ -319,11 +441,34 @@ async function startGame() {
         mode: getSelectedMode()
     };
 
+    hideGameOverSummary();
     elements.board.classList.toggle("is-drift", game.mode === "drift");
     playEffect("start");
     updateHud();
     updateStartLabel();
+    updatePauseLabel();
+    await runCountdown(token);
+    if (token !== runToken) {
+        return;
+    }
     await nextRound(token);
+}
+
+async function runCountdown(token) {
+    lockPads();
+    setPhase("preview");
+    const steps = ["3", "2", "1", t("countdownGo")];
+
+    for (const step of steps) {
+        if (token !== runToken) return;
+        elements.core.textContent = step;
+        setFeedback("clean", { text: step, hot: true });
+        playEffect(step === t("countdownGo") ? "success" : "start");
+        elements.board.classList.add("is-round-clear");
+        await pausableSleep(420, token);
+        elements.board.classList.remove("is-round-clear");
+        await pausableSleep(110, token);
+    }
 }
 
 async function nextRound(token) {
@@ -333,13 +478,16 @@ async function nextRound(token) {
 
     lockPads();
     setPhase("preview");
+    updatePauseLabel();
     game.playerIndex = 0;
     game.round += 1;
+    game.roundStartedAt = performance.now();
     game.sequence.push(Math.floor(Math.random() * PAD_CONFIG.length));
     updateHud();
+    bumpHud("round");
 
     const delay = getRoundDelay();
-    await sleep(420);
+    await pausableSleep(420, token);
 
     for (const [index, padId] of game.sequence.entries()) {
         if (token !== runToken) {
@@ -350,8 +498,8 @@ async function nextRound(token) {
             elements.board.style.rotate = `${(Math.random() * 2) - 1}deg`;
         }
 
-        await flashPad(padId, { duration: Math.max(180, delay * 0.48), type: game.mode === "speedrun" ? "square" : "sine" });
-        await sleep(Math.max(110, delay * 0.44));
+        await flashPad(padId, { duration: Math.max(180, delay * 0.48), type: game.mode === "speedrun" ? "square" : "sine", preview: true, token });
+        await pausableSleep(Math.max(110, delay * 0.44), token);
     }
 
     if (token !== runToken) {
@@ -360,6 +508,8 @@ async function nextRound(token) {
 
     elements.board.style.rotate = "0deg";
     setPhase("player");
+    updatePauseLabel();
+    setFeedback("player");
     unlockPads();
 }
 
@@ -373,7 +523,7 @@ async function handlePadInput(padId) {
     const reactionMs = now - game.lastInputAt;
 
     game.lastInputAt = now;
-    await flashPad(padId, { duration: 180, type: "triangle" });
+    await flashPad(padId, { duration: 180, type: "triangle", player: true });
 
     if (padId !== expected) {
         endGame(padId);
@@ -383,15 +533,26 @@ async function handlePadInput(padId) {
     const settings = MODE_SETTINGS[game.mode];
     const speedBonus = game.mode === "speedrun" ? Math.max(0, Math.round(settings.speedBonus - (reactionMs / 30))) : settings.speedBonus;
     game.combo += 1;
+    game.lastBonus = speedBonus;
     game.score += settings.scoreBase + (game.round * 8) + speedBonus;
     game.playerIndex += 1;
     updateHud();
+    bumpHud("score", "combo");
+    setFeedback(game.combo > 0 && game.combo % 8 === 0 ? "comboHot" : game.playerIndex === game.sequence.length ? "perfect" : "clean", {
+        values: { combo: game.combo },
+        bonus: speedBonus,
+        hot: game.combo > 0 && game.combo % 8 === 0
+    });
 
     if (game.playerIndex === game.sequence.length) {
         lockPads();
         setPhase("success");
+        updatePauseLabel();
+        setFeedback("roundClear", { values: { round: game.round }, hot: true });
+        elements.board.classList.add("is-round-clear");
         playEffect("success");
-        await sleep(650);
+        await pausableSleep(650, runToken);
+        elements.board.classList.remove("is-round-clear");
         await nextRound(runToken);
     }
 }
@@ -400,16 +561,23 @@ function endGame(wrongPadId) {
     runToken += 1;
     lockPads();
     setPhase("gameover");
+    updatePauseLabel();
     playEffect("fail");
     flashPad(wrongPadId, { duration: 280, wrong: true });
 
+    const previousBest = highScores[game.mode] || 0;
+    game.newBest = game.score > previousBest;
     if (game.score > (highScores[game.mode] || 0)) {
         highScores[game.mode] = game.score;
         saveScores();
     }
 
     updateHud();
+    if (game.newBest) {
+        bumpHud("best");
+    }
     updateStartLabel();
+    showGameOverSummary(previousBest);
 }
 
 function resetScores() {
@@ -419,10 +587,77 @@ function resetScores() {
     elements.status.textContent = t("scoresReset");
 }
 
+function pauseGame() {
+    if (!["preview", "player", "success"].includes(game.phase) || game.paused) {
+        return;
+    }
+
+    game.paused = true;
+    game.previousPhase = game.phase;
+    lockPads();
+    setPhase("paused");
+    setFeedback("paused");
+}
+
+function resumeGame() {
+    if (!game.paused) {
+        return;
+    }
+
+    const nextPhase = game.previousPhase || "player";
+    game.paused = false;
+    setPhase(nextPhase);
+    setFeedback(nextPhase);
+
+    if (nextPhase === "player") {
+        unlockPads();
+    }
+}
+
+function togglePause() {
+    if (game.paused) {
+        resumeGame();
+    } else {
+        pauseGame();
+    }
+}
+
+function getModeLabel(mode = game.mode) {
+    const key = mode === "speedrun" ? "modeSpeedrun" : mode === "drift" ? "modeDrift" : "modeClassic";
+    return t(key);
+}
+
+function showGameOverSummary(previousBest) {
+    game.previousBest = previousBest;
+    updateGameOverSummaryText();
+    elements.overlay.hidden = false;
+}
+
+function updateGameOverSummaryText() {
+    elements.summaryScore.textContent = String(game.score);
+    elements.summaryRound.textContent = String(game.round);
+    elements.summaryMode.textContent = getModeLabel(game.mode);
+    elements.summaryBest.textContent = String(highScores[game.mode] || 0);
+    elements.summaryNote.textContent = game.newBest
+        ? t("newBest")
+        : formatText("noNewBest", { best: game.previousBest || 0 });
+}
+
+function hideGameOverSummary() {
+    elements.overlay.hidden = true;
+}
+
 function bindEvents() {
     elements.start.addEventListener("click", startGame);
+    elements.pause.addEventListener("click", togglePause);
     elements.languageToggle.addEventListener("click", () => setLanguage(language === "en" ? "es" : "en"));
     elements.resetScores.addEventListener("click", resetScores);
+    elements.playAgain.addEventListener("click", startGame);
+    elements.changeMode.addEventListener("click", () => {
+        hideGameOverSummary();
+        resetRun();
+        document.querySelector(".mode-picker").scrollIntoView({ behavior: "smooth", block: "center" });
+    });
 
     elements.modeInputs.forEach((input) => {
         input.addEventListener("change", resetRun);
@@ -435,8 +670,19 @@ function bindEvents() {
     document.addEventListener("keydown", (event) => {
         const key = event.key.toLowerCase();
 
+        if (key === "enter" && game.paused) {
+            resumeGame();
+            return;
+        }
+
         if (key === "enter" && game.phase !== "preview") {
             startGame();
+            return;
+        }
+
+        if (key === " " && game.phase !== "idle" && game.phase !== "gameover") {
+            event.preventDefault();
+            togglePause();
             return;
         }
 
